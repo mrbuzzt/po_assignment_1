@@ -15,3 +15,8 @@
 *.exe
 *.out
 *.app
+nibbles_asm
+nibbles_asm_start
+
+# Temp files
+*~
