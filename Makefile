@@ -23,4 +23,4 @@ nibbles_asm_start: start.o nibbles.o helpers.o workaround.o
 clean:
 	rm -f *~
 	rm -f *.o
-	rm -f nibbles nibbles_asm
+	rm -f nibbles_asm_start nibbles_asm
