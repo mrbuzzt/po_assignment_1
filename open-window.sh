@@ -1,3 +1,3 @@
 #!/bin/sh
 
-xterm -fn 6x9 -geometry 64x64
+xterm -fn 6x9 -geometry 80x50
