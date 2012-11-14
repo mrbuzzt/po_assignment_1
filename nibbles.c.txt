@@ -1,0 +1,164 @@
+#include <unistd.h>
+#include <stdlib.h>
+
+// Field size should be dividable by 4 (2 bits encoding for tile state = 0.25 byte).
+#define FIELD_SIZE      64
+#define MAX_WORM_LEN    (2 * FIELD_SIZE * FIELD_SIZE)
+#define WALL_TILE       '#'
+#define APPLE_TILE      '*'
+#define WORM_TILE       'O'
+#define FLOOR_TILE      ' '
+#define SLEEP_TIME      50000L
+
+extern int nib_poll_kbd(void);
+
+extern void nib_put_scr(int x, int y, int ch);
+
+extern void nib_init(void);
+
+extern void nib_end(void);
+
+int worm_head, worm_tail;
+char worm[2 * FIELD_SIZE * FIELD_SIZE];
+int worm_dx;
+int worm_dy;
+
+char* apples;
+
+
+void add_worm_part(char x, char y)
+{
+    worm_head += 2;
+    worm_head %= MAX_WORM_LEN;
+    worm[worm_head] = x;
+    worm[worm_head + 1] = y;
+}
+
+void remove_worm_part()
+{
+    worm_tail += 2;
+    worm_head %= MAX_WORM_LEN;
+}
+
+void init_worm(int len)
+{
+    int x_pos, y_pos, i;
+    worm_head = worm_tail = 0;
+    x_pos = FIELD_SIZE / 2;
+    y_pos = FIELD_SIZE / 2;
+    for (i = len; i > 0; i--)
+    {
+        add_worm_part(x_pos, y_pos + i);
+        nib_put_scr(x_pos, y_pos + i, WORM_TILE);
+    }
+    worm_dx = 0;
+    worm_dy = -1;
+}
+
+void init_apples(int num_apples)
+{
+    char* i;
+    apples = (char*) calloc(num_apples * 2, sizeof(char));
+    i = apples + 2 * num_apples;
+    while (--i >= apples)
+    {
+        *i = rand() % (FIELD_SIZE + 1);
+        *(--i) = rand() % (FIELD_SIZE + 1);
+        nib_put_scr(*i, *(i + 1), APPLE_TILE);
+    }
+}
+
+int probe_worm_collision(char x, char y)
+{
+    int i = worm_tail;
+    while (1)
+    {
+        if (worm[i] == x && worm[i + 1] == y) return 1;
+        if (i == worm_head) return 0;
+        i += 2;
+        i %= MAX_WORM_LEN;
+    }
+}
+
+void start_game(int len, int num_apples)
+{
+    char x, y, grow;
+    char* i;
+
+    // Initialize the game
+    nib_init();
+    init_worm(len);
+    init_apples(num_apples);
+
+    // Game loop
+    while (1)
+    {
+        int input = nib_poll_kbd();
+        switch (input)
+        {
+        case 'q':
+            goto end;
+        case 258:
+            worm_dx = 0;
+            worm_dy = 1;
+            break;
+        case 259:
+            worm_dx = 0;
+            worm_dy = -1;
+            break;
+        case 260:
+            worm_dx = -1;
+            worm_dy = 0;
+            break;
+        case 261:
+            worm_dx = 1;
+            worm_dy = 0;
+            break;
+        }
+
+        x = worm[worm_head] + worm_dx;
+        y = worm[worm_head + 1] + worm_dy;
+
+        // Check collision with wall.
+        if (x < 0 || x >= FIELD_SIZE || y < 0 || y >= FIELD_SIZE) goto end;
+
+        // Check collision with worm.
+        if (probe_worm_collision(x, y)) goto end;
+
+        // Check collision with apple.
+        grow = 0;
+        i = apples + 2 * num_apples;
+        while ((i -= 2) >= apples)
+        {
+            if (*i == x && *(i + 1) == y)
+            {
+                grow = 1;
+                *i = rand() % (FIELD_SIZE + 1);
+                *(i + 1) = rand() % (FIELD_SIZE + 1);
+                nib_put_scr(*i, *(i + 1), APPLE_TILE);
+            }
+        }
+
+        // Let the worm possibly grow.
+        if (grow)
+            grow = 0;
+        else
+        {
+            nib_put_scr(worm[worm_tail], worm[worm_tail + 1], FLOOR_TILE);
+            remove_worm_part();
+        }
+
+        // Move the head forward.
+        nib_put_scr(x, y, WORM_TILE);
+        add_worm_part(x, y);
+
+        // Wait to continue the loop.
+        usleep(SLEEP_TIME);
+    }
+    end:
+    nib_end();
+}
+
+
+
+    
