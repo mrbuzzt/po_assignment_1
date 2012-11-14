@@ -73,7 +73,7 @@ loop_init_apples:   # Set up the initial apples.
     divl    %edi                    # %edx = %eax MOD FIELD_Y (i.e. the y position)
     pushl   %edx                    # push it on the stack for upcoming nib_put_scr call
     movl    $apples, %ebx           # %ebx = $apples
-    movl    4(%esp), %ecx           # %ecx = top of stack
+    movl    8(%esp), %ecx           # %ecx = top of stack
     movl    %edx, -4(%ebx, %ecx, 8) # apples[8 * %ecx - 4] = %edx
     # Randomize an x position.
     call    rand                    # %eax = rand()
@@ -81,10 +81,10 @@ loop_init_apples:   # Set up the initial apples.
     xorl    %edx, %edx              # %edx = 0
     divl    %edi                    # %edx = %eax MOD FIELD_X (i.e. the x position)
     pushl   %edx                    # push it on the stack for upcoming nib_put_scr call
-    movl    4(%esp), %ecx           # %ecx = top of stack
+    movl    12(%esp), %ecx           # %ecx = top of stack
     movl    %edx, -8(%ebx, %ecx, 8) # apples[8 * %ecx - 8] = %edx
     # Call nib_put_scr
-    call    nib_put_scr
+    call    nib_put_scr             # call nib_put_
     addl    $12, %esp
     # Continue the loop.
     popl    %ecx
