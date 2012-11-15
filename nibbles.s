@@ -6,6 +6,12 @@
 .set    BUFFER_SIZE, FIELD_X * FIELD_Y * 2 * 4 # i.e. 2 words for each tile
 .set    WORM_TILE, 'O'
 .set    APPLE_TILE, '@'
+.set    SLEEP_TIME, 100000
+.set    DOWN_KEY, 258
+.set    UP_KEY, 259
+.set    LEFT_KEY, 260
+.set    RIGHT_KEY, 261
+.set    NO_KEY, -1
 
 .section .data
 debug:
@@ -17,9 +23,13 @@ worm_head:
 worm_tail:
     .long   0
 worm_dx:
-    .byte   0
+    .long   0
+worm_head_x:
+    .long   0
+worm_head_y:
+    .long   0
 worm_dy:
-    .byte   0
+    .long   0
     .lcomm  worm, BUFFER_SIZE
     .lcomm  apples, BUFFER_SIZE
 
@@ -33,7 +43,7 @@ start_game:
     call    nib_init    # nib_init()
 
     # Initialize the worm.
-    movl    $0, worm_head   # worm_head = 0
+    movl    $-8, worm_head   # worm_head = -8
     movl    $0, worm_tail   # worm_tail = 0
     # Add len initial worm parts.
     movl    8(%ebp), %ecx   # %ecx = len
@@ -46,15 +56,15 @@ loop1:       # Iterate to add all parts
     addl    $FIELD_Y / 2, %eax      # %eax = %eax + FIELD_Y / 2
     pushl   %eax                    # push %eax on the stack for later nib_put_scr call
     movl    worm_head, %edx         # %edx = worm_head
+    # Move the worm_head forward before saving the new component.
+    addl    $8, %edx                # %edx += 8
+    movl    %edx, worm_head         # worm_head = %edx
     movl    $worm, %edi             # %edi = $worm
     movl    %eax, 4(%edi, %edx, 8)  # worm[worm_head + 4] = %eax
     # Add the x component
     movl    $FIELD_X / 2, %eax      # %eax = $FIELD_X / 2
     pushl   %eax                    # push %eax again on the stack for nib_put_scr
     movl    %eax, (%edi, %edx, 8)   # worm[worm_head] = % eax
-    # Move the worm_head forward
-    addl    $8, %edx
-    movl    %edx, worm_head
     # Call nib_put_scr(x, y, WORM_TILE)    
     call    nib_put_scr
     addl    $12, %esp               # Restore the stack
@@ -65,7 +75,7 @@ loop1:       # Iterate to add all parts
     movl    12(%ebp), %ecx  # %ecx = num_apples
 loop_init_apples:   # Set up the initial apples.
     pushl   %ecx
-    pushl    $APPLE_TILE             # already push the $WORM_TILE for the coming nib_put_scr call
+    pushl   $APPLE_TILE             # already push the $WORM_TILE for the coming nib_put_scr call
     # Randomize a y position.
     call    rand                    # %eax = rand()
     movl    $FIELD_Y, %edi          # %ebx = $FIELD_Y
@@ -81,18 +91,73 @@ loop_init_apples:   # Set up the initial apples.
     xorl    %edx, %edx              # %edx = 0
     divl    %edi                    # %edx = %eax MOD FIELD_X (i.e. the x position)
     pushl   %edx                    # push it on the stack for upcoming nib_put_scr call
-    movl    12(%esp), %ecx           # %ecx = top of stack
+    movl    12(%esp), %ecx          # %ecx = top of stack
     movl    %edx, -8(%ebx, %ecx, 8) # apples[8 * %ecx - 8] = %edx
     # Call nib_put_scr
-    call    nib_put_scr             # call nib_put_
-    addl    $12, %esp
+    call    nib_put_scr             # call nib_put_scr(x, y, APPLE_TILE)
+    addl    $12, %esp               # reset the stack
     # Continue the loop.
-    popl    %ecx
-    loop    loop_init_apples
+    popl    %ecx                    # pop %ecx
+    loop    loop_init_apples        # if (--%ecx == 0) jump to loop_init_apples
     
-    pushl   $5000000
+game_loop:
+    # The game loop
+    # sleep at first
+    pushl   $SLEEP_TIME
     call    usleep
-    call    nib_end
+    addl    $4, %esp
 
-    leave
-    ret
+    # read the keyboard
+    call    nib_poll_kbd       # %eax = nib_poll_keyboard()
+    cmpl    $NO_KEY, %eax
+    je      2f
+    cmpl    $DOWN_KEY, %eax
+    jne     1f
+    movl    $0, worm_dx
+    movl    $1, worm_dy
+    jmp     2f
+1:
+    cmpl    $UP_KEY, %eax
+    jne     1f
+    movl    $0, worm_dx
+    movl    $-1, worm_dy
+    jmp     2f
+1:
+    cmpl    $LEFT_KEY, %eax
+    jne     1f
+    movl    $-1, worm_dx
+    movl    $0, worm_dy
+    jmp     2f
+1:
+    cmpl    $RIGHT_KEY, %eax
+    jne     2f
+    movl    $0, worm_dx
+    movl    $1, worm_dy
+    jmp     game_over #debug
+2:  # end of selection
+    # Calculate the new worm head
+    movl    worm_head, %ecx
+    movl    $worm, %edx
+    movl    (%edx, %ecx, 8), %ebx
+    add     worm_dx, %ebx
+    movl    %ebx, worm_head_x
+    movl    4(%edx, %ecx, 8), %ebx
+    add     worm_dy, %ebx
+    movl    %ebx, worm_head_y
+
+    # To do:
+    # - Probe the position for colision
+    # - save the head and move forward
+    # - grow or remove the tail part
+
+    pushl   $WORM_TILE
+    pushl   worm_head_y
+    pushl   worm_head_x
+    call    nib_put_scr
+    addl    $12, %esp
+    
+    # Restart the game loop
+    jmp     game_loop
+
+game_over:
+    call    nib_end
