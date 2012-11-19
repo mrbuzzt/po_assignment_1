@@ -200,7 +200,7 @@ game_loop:
     addl    $12, %esp
     popl    %ecx                        # Restore %ecx.
     # Store the new coordinates.
-    movl    %edx, -8(%ebx, %ecx, 8)     # apples[%ecx - 1].x = %edx
+    movl    %edi, -8(%ebx, %ecx, 8)     # apples[%ecx - 1].x = %edi
     movl    %esi, -4(%ebx, %ecx, 8)     # apples[%ecx - 1].y = %esi
 
     # Remember to let the worm grow.
