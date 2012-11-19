@@ -8,7 +8,7 @@
 .set    WORM_TILE,      'O'
 .set    APPLE_TILE,     '@'
 .set    FLOOR_TILE,     ' '
-.set    SLEEP_TIME,     250000
+.set    SLEEP_TIME,     100000
 .set    DOWN_KEY,       258   
 .set    UP_KEY,         259
 .set    LEFT_KEY,       260
@@ -234,7 +234,28 @@ game_loop:
 2:
 
     ## Probe for collision with the worm itself
-   
+    movl    $worm, %eax                 # %eax = &worm
+    movl    worm_tail, %ebx             # %ebx = worm_tail
+1:  # Loop over all worm tiles.
+    # Check if worm_head_x and worm_head_y correspond to the current tile.
+    movl    (%eax, %ebx, 8), %ecx       # %ecx = worm[%ebx].x
+    cmpl    %ecx, worm_head_x           # if (worm_head_x - %ecx
+    jne     2f                          #       != 0) goto 2f
+    movl    4(%eax, %ebx, 8), %ecx      # %ecx = worm[%ebx].y
+    cmpl    %ecx, worm_head_y           # if (worm_head_y - %ecx
+    jne     2f                          #       != 0) goto 2f
+    # End the game on collision.
+    jmp     game_over
+2:  # End of the loop body, beginning of loop condition.
+    cmpl    %ebx, worm_head             # if (worm_head - %ebx
+    je      3f                          #       == 0) goto 3f
+    incl    %ebx                        # %ebx++
+    xorl    %edx, %edx
+    cmpl    $FIELD_SIZE, %ebx
+    cmovel  %edx, %ebx
+    jmp     1b  
+3:  #End of the loop
+
     ## Grow the worm
     pushl   $WORM_TILE                  # Push $WORM_TILE for nib_put_scr
     # Calculate the new worm_head: worm_head = (worm_head + 1) % FIELD_SIZE
