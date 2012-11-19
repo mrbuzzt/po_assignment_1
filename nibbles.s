@@ -16,8 +16,15 @@
 .set    NO_KEY,         -1
 
 .section .data
-debug:
-    .asciz "--> %d\n"
+d_values:
+    .long   0
+    .long   1
+    .long   0
+    .long   -1
+    .long   -1
+    .long   0
+    .long   1
+    .long   0
 
 .section .bss
 worm_head:
@@ -114,32 +121,17 @@ game_loop:
     addl    $4, %esp
 
     ## Read the keyboard and evaluate the key.
-    call    nib_poll_kbd       # %eax = nib_poll_keyboard()
-    cmpl    $NO_KEY, %eax
-    je      2f
-    cmpl    $DOWN_KEY, %eax
-    jne     1f
-    movl    $0, worm_dx
-    movl    $1, worm_dy
-    jmp     2f
-1:
-    cmpl    $UP_KEY, %eax
-    jne     1f
-    movl    $0, worm_dx
-    movl    $-1, worm_dy
-    jmp     2f
-1:
-    cmpl    $LEFT_KEY, %eax
-    jne     1f
-    movl    $-1, worm_dx
-    movl    $0, worm_dy
-    jmp     2f
-1:
-    cmpl    $RIGHT_KEY, %eax
-    jne     2f
-    movl    $1, worm_dx
-    movl    $0, worm_dy
-2:  # end of selection
+    call    nib_poll_kbd            # %eax = nib_poll_keyboard()
+    cmpl    $RIGHT_KEY, %eax        # if (%eax - $RIGHT_KEY
+    jg      no_key                  #       > 0) goto no_key
+    subl    $DOWN_KEY, %eax         # %eax -= $DOWN_KEY
+    js      no_key                  # if (%eax < 0) goto no_key
+    movl    $d_values, %ebx         #
+    movl    (%ebx, %eax, 8), %ecx   #
+    movl    %ecx, worm_dx           #
+    movl    4(%ebx, %eax, 8), %ecx  #
+    movl    %ecx, worm_dy           #
+no_key:  # end of selection
 
     ## Calculate the new worm head
     # Calculate the x position: worm_head_x = worm[worm_head].x + worm_dx
