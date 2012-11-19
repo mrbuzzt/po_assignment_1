@@ -25,15 +25,16 @@ d_values:
     .long   0
     .long   1
     .long   0
+worm_dy:
+    .long   -1
+worm_head:
+    .long   -1
+
 
 .section .bss
-worm_head:
-    .long   0
 worm_tail:
     .long   0
 worm_dx:
-    .long   0
-worm_dy:
     .long   0
 worm_head_x:
     .long   0
@@ -53,11 +54,6 @@ start_game:
     movl    %esp, %ebp  # capture the new base pointer
     call    nib_init    # nib_init()
 
-    # Initialize the worm.
-    movl    $0, worm_dx
-    movl    $-1, worm_dy
-    movl    $-1, worm_head   # worm_head = -1
-    movl    $0, worm_tail   # worm_tail = 0
     # Add len initial worm parts.
     movl    8(%ebp), %ecx   # %ecx = len
 loop1:       # Iterate to add all parts
