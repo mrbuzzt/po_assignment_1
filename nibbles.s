@@ -55,30 +55,14 @@ start_game:
     call    nib_init    # nib_init()
 
     # Add len initial worm parts.
-    movl    8(%ebp), %ecx   # %ecx = len
-loop1:       # Iterate to add all parts
-    pushl   %ecx
-    pushl   $WORM_TILE              # push WORM_TILE on stack for later nib_put_scr call
-    movl    $worm, %edi             # %edi = $worm
-    # Compute and add the y component.
-    movl    %ecx, %eax              # %eax = %ecx
-    addl    $FIELD_Y / 2, %eax      # %eax = %eax + FIELD_Y / 2
-    pushl   %eax                    # push %eax on the stack for later nib_put_scr call
-    movl    worm_head, %edx         # %edx = worm_head
-    # Move the worm_head forward before saving the new component.
-    incl    %edx                    # %edx++
-    movl    %edx, worm_head         # worm_head = %edx
-    movl    $worm, %edi             # %edi = $worm
-    movl    %eax, 4(%edi, %edx, 8)  # worm[worm_head + 4] = %eax
-    # Add the x component
-    movl    $FIELD_X / 2, %eax      # %eax = $FIELD_X / 2
-    pushl   %eax                    # push %eax again on the stack for nib_put_scr
-    movl    %eax, (%edi, %edx, 8)   # worm[worm_head] = % eax
-    # Call nib_put_scr(x, y, WORM_TILE)    
-    call    nib_put_scr
-    addl    $12, %esp               # Restore the stack
-    popl    %ecx
-    loop    loop1                   # Continue loop
+    movl    $FIELD_X / 2, %esi      # %esi = $FIELD_X / 2
+    movl    8(%ebp), %edi           # %ecx = len
+    addl    $FIELD_Y / 2, %edi      # %eax = %eax + FIELD_Y / 2
+loop_init_worm:       # Iterate to add all parts
+    call    add_worm_part
+    decl    %edi
+    cmpl    $FIELD_Y / 2, %edi
+    jg      loop_init_worm
 
     # Initialize the apples.
     movl    12(%ebp), %ecx  # %ecx = num_apples
@@ -166,11 +150,7 @@ no_key:  # end of selection
     addl     $12, %esp
     # Calculate the new worm_tail: worm_tail = (worm_tail + 1) % FIELD_SIZE
     movl    worm_tail, %edx             # %eax = worm_tail
-    incl    %edx                        # %eax++
-    cmpl    $FIELD_SIZE, %edx           # (%edx - $FIELD_SIZE)
-    jl      1f                          # skip next instruction if < 0
-    movl    $0, %edx                    # then %eax = 0
-1:
+    call    move_worm_index
     movl    %edx, worm_tail             # worm_tail = %edx
 2:
 
@@ -198,27 +178,9 @@ no_key:  # end of selection
 3:  #End of the loop
 
     ## Grow the worm
-    pushl   $WORM_TILE                  # Push $WORM_TILE for nib_put_scr
-    # Calculate the new worm_head: worm_head = (worm_head + 1) % FIELD_SIZE
-    movl    worm_head, %edx             # %eax = worm_head
-    incl    %edx                        # %eax++
-    cmpl    $FIELD_SIZE, %edx           # (%edx - $FIELD_SIZE)
-    jl      1f                          # skip next instruction if < 0
-    movl    $0, %edx                    # then %eax = 0
-1:
-    movl    %edx, worm_head             # worm_head = %edx
-    # Relocate the worm: worm[worm_head].y = worm_head_y
-    movl    $worm, %eax                 # %eax = $worm_head
-    movl    worm_head_y, %ebx           # %ebx = worm_head_y
-    movl    %ebx, 4(%eax, %edx, 8)
-    pushl   %ebx                        # push the y coordinate for nib_put_scr
-    # Relocate the worm: worm[worm_head].x = worm_head_x
-    movl    worm_head_x, %ebx
-    movl    %ebx, (%eax, %edx, 8)
-    pushl   %ebx                        # push the x coordinate for nib_put_scr
-    # Draw the new worm head
-    call    nib_put_scr                 # nib_put_scr(worm_head_x, worm_head_y, $WORM_TILE)
-    addl    $12, %esp
+    movl    worm_head_x, %esi
+    movl    worm_head_y, %edi
+    call    add_worm_part
  
     # Restart the game loop
     jmp     game_loop
@@ -281,8 +243,9 @@ add_worm_part:
 # Moves an index pointer to the worm array one position forward.
 # Params:   %edx    index in the worm array
 move_worm_index:
-    incl    %edx                        # %eax++
-    cmpl    $FIELD_SIZE, %edx           # (%edx - $FIELD_SIZE)
-    jl      1f                          # skip next instruction if < 0
-    movl    $0, %edx                    # then %eax = 0
+    incl    %edx                        # %edx++
+    cmpl    $FIELD_SIZE, %edx           # if (%edx - $FIELD_SIZE
+    jl      1f                          #       < 0) skip instruction
+    xorl    %edx, %edx                  # %edx = 0
+1:
     ret
