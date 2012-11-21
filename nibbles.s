@@ -83,30 +83,7 @@ loop1:       # Iterate to add all parts
     # Initialize the apples.
     movl    12(%ebp), %ecx  # %ecx = num_apples
 loop_init_apples:   # Set up the initial apples.
-    pushl   %ecx
-    pushl   $APPLE_TILE             # already push the $WORM_TILE for the coming nib_put_scr call
-    # Randomize a y position.
-    call    rand                    # %eax = rand()
-    movl    $FIELD_Y, %edi          # %ebx = $FIELD_Y
-    xorl    %edx, %edx              # %edx = 0
-    divl    %edi                    # %edx = %eax MOD FIELD_Y (i.e. the y position)
-    pushl   %edx                    # push it on the stack for upcoming nib_put_scr call
-    movl    $apples, %ebx           # %ebx = $apples
-    movl    8(%esp), %ecx           # %ecx = top of stack
-    movl    %edx, -4(%ebx, %ecx, 8) # apples[8 * %ecx - 4] = %edx
-    # Randomize an x position.
-    call    rand                    # %eax = rand()
-    movl    $FIELD_X, %edi          # %ebx = $FIELD_X
-    xorl    %edx, %edx              # %edx = 0
-    divl    %edi                    # %edx = %eax MOD FIELD_X (i.e. the x position)
-    pushl   %edx                    # push it on the stack for upcoming nib_put_scr call
-    movl    12(%esp), %ecx          # %ecx = top of stack
-    movl    %edx, -8(%ebx, %ecx, 8) # apples[8 * %ecx - 8] = %edx
-    # Call nib_put_scr
-    call    nib_put_scr             # call nib_put_scr(x, y, APPLE_TILE)
-    addl    $12, %esp               # reset the stack
-    # Continue the loop.
-    popl    %ecx                    # pop %ecx
+    call    create_apple
     loop    loop_init_apples        # if (--%ecx == 0) jump to loop_init_apples
     
 game_loop:
@@ -166,31 +143,7 @@ no_key:  # end of selection
     movl    -4(%ebx, %ecx, 8), %eax     # %eax = apples[%ecx - 1].y
     cmp     %eax, worm_head_y           # if (worm_head_y - %eax
     jne     2f                          #       != 0) goto 2f
-    # Generate new apple coordinates.
-    pushl   %ecx                        # Save %ecx because of function calls.
-    # Generate the y coordinate and store it into %esi.
-    call    rand                        # %eax = rand()
-    xorl    %edx, %edx                  # %edx = 0
-    movl    $FIELD_Y, %edi              # %edi = $FIELD_Y
-    divl    %edi                        # %edx = %edx:%eax & %edi
-    movl    %edx, %esi                  # %esi = %edx
-    # Generate the x coordinate and store it into %edi.
-    call    rand                        # %eax = rand(), use as x coordinate
-    xorl    %edx, %edx                  # %edx = 0
-    movl    $FIELD_X, %edi              # %edi = $FIELD_X
-    divl    %edi                        # %edx = %edx:%eax % %edi
-    movl    %edx, %edi                  # %edi = %edx
-    # Draw the new apple.
-    pushl   $APPLE_TILE
-    pushl   %esi
-    pushl   %edi
-    call    nib_put_scr
-    addl    $12, %esp
-    popl    %ecx                        # Restore %ecx.
-    # Store the new coordinates.
-    movl    %edi, -8(%ebx, %ecx, 8)     # apples[%ecx - 1].x = %edi
-    movl    %esi, -4(%ebx, %ecx, 8)     # apples[%ecx - 1].y = %esi
-
+    call    create_apple
     # Remember to let the worm grow.
     incl    grow_worm
 2:    
@@ -272,3 +225,34 @@ no_key:  # end of selection
 
 game_over:
     call    nib_end
+
+# Generates coordinated for a new apple, stores them in apples
+# and draws it on the screen.
+# Params:   %ecx    Index+1 in the apples array
+# Uses:     %eax, %edx, %edi, %esi
+create_apple:
+    movl    $apples, %ebx
+    pushl   %ecx
+    # Generate the y coordinate and store it into %esi.
+    call    rand                        # %eax = rand()
+    xorl    %edx, %edx                  # %edx = 0
+    movl    $FIELD_Y, %edi              # %edi = $FIELD_Y
+    divl    %edi                        # %edx = %edx:%eax & %edi
+    movl    %edx, %esi                  # %esi = %edx
+    # Generate the x coordinate and store it into %edi.
+    call    rand                        # %eax = rand(), use as x coordinate
+    xorl    %edx, %edx                  # %edx = 0
+    movl    $FIELD_X, %edi              # %edi = $FIELD_X
+    divl    %edi                        # %edx = %edx:%eax % %edi
+    movl    %edx, %edi                  # %edi = %edx
+    # Draw the new apple.
+    pushl   $APPLE_TILE
+    pushl   %esi
+    pushl   %edi
+    call    nib_put_scr
+    addl    $12, %esp
+    popl    %ecx                        # Restore %ecx.
+    # Store the new coordinates.
+    movl    %edi, -8(%ebx, %ecx, 8)     # apples[%ecx - 1].x = %edi
+    movl    %esi, -4(%ebx, %ecx, 8)     # apples[%ecx - 1].y = %esi
+    ret
