@@ -256,3 +256,33 @@ create_apple:
     movl    %edi, -8(%ebx, %ecx, 8)     # apples[%ecx - 1].x = %edi
     movl    %esi, -4(%ebx, %ecx, 8)     # apples[%ecx - 1].y = %esi
     ret
+
+# Stores the given worm part in the worm array, moving worm_head forward.
+# Additionally it draws the worm part.
+# Params:   %esi    x coordinate
+#           %edi    y coordinate
+add_worm_part:
+    pushl   $WORM_TILE              # push WORM_TILE on stack for later nib_put_scr call
+    movl    $worm, %eax             # %edi = $worm
+    # Compute and add the y component.
+    movl    worm_head, %edx         # %edx = worm_head
+    # Move the worm_head forward before saving the new component.
+    call    move_worm_index         # move_worm_index()
+    movl    %edx, worm_head         # worm_head = %edx
+    pushl   %edi                    #
+    movl    %edi, 4(%eax, %edx, 8)  # worm[worm_head + 4] = %eax
+    pushl   %esi                    # push %eax again on the stack for nib_put_scr
+    movl    %esi, (%eax, %edx, 8)   # worm[worm_head] = % eax
+    # Call nib_put_scr(x, y, WORM_TILE)    
+    call    nib_put_scr
+    addl    $12, %esp               # Restore the stack
+    ret
+
+# Moves an index pointer to the worm array one position forward.
+# Params:   %edx    index in the worm array
+move_worm_index:
+    incl    %edx                        # %eax++
+    cmpl    $FIELD_SIZE, %edx           # (%edx - $FIELD_SIZE)
+    jl      1f                          # skip next instruction if < 0
+    movl    $0, %edx                    # then %eax = 0
+    ret
