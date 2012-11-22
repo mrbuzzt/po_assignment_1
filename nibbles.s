@@ -3,8 +3,7 @@
 
 .set    FIELD_X,        80
 .set    FIELD_Y,        50
-.set    FIELD_SIZE,     FIELD_X * FIELD_Y 
-.set    BUFFER_SIZE,    FIELD_SIZE
+.set    BUFFER_SIZE,    2 * FIELD_X * FIELD_Y 
 .set    WORM_TILE,      'O'
 .set    APPLE_TILE,     '@'
 .set    FLOOR_TILE,     ' '
@@ -28,11 +27,11 @@ d_values:
 worm_d:
     .byte   0x00
     .byte   0xFF
-worm_head:
-    .long   -1
 
 
 .section .bss
+worm_head:
+    .long   0
 worm_tail:
     .long   0
 worm_head_pos:
@@ -42,8 +41,8 @@ worm_head_y:
     .byte   0
 grow_worm:
     .byte   0
-    .lcomm  worm, BUFFER_SIZE
     .lcomm  apples, BUFFER_SIZE
+    .lcomm  worm, BUFFER_SIZE
 
 
 .section .text
@@ -93,7 +92,9 @@ no_key:  # end of selection
     movl    worm_head, %ecx
     movl    $worm, %edx
     movw    (%edx, %ecx, 2), %ax
-    addw    worm_d, %ax
+    movw    worm_d, %bx
+    addb    %bl, %al
+    addb    %bh, %ah
     movw    %ax, worm_head_pos
     # Probe for wall colision
     cmpb    $0, %al
@@ -127,35 +128,34 @@ no_key:  # end of selection
     # Check if we want to grow the worm.
     cmpb    $0, grow_worm               # if (grow_worm
     jg      after_grow                          #       > 0) goto 2f
-    # Push floor tile on stack to draw it with nib_put_scr
-    movl    worm_tail, %edx
-    movl    $worm, %ecx
-    movw    (%ecx, %edx, 2), %bx
-    movl    $FLOOR_TILE, %eax
-    call    draw
     # Calculate the new worm_tail: worm_tail = (worm_tail + 1) % FIELD_SIZE
     movl    worm_tail, %edx             # %eax = worm_tail
     call    move_worm_index
     movl    %edx, worm_tail             # worm_tail = %edx
+    # Draw floor where the tail points now (tail is exclusive)
+    movl    $worm, %ecx
+    movw    (%ecx, %edx, 2), %bx
+    movl    $FLOOR_TILE, %eax
+    call    draw
 after_grow:
 
     ## Probe for collision with the worm itself
     movl    $worm, %eax                 # %eax = &worm
     movl    worm_tail, %edx             # %ebx = worm_tail
-1:  # Loop over all worm tiles.
-    # Check if worm_head_x and worm_head_y correspond to the current tile.
-    movw    (%eax, %edx, 2), %cx        # %ecx = worm[%ebx].x
+loop_self_collision:  # Loop over all worm tiles.
+    # Check loop condition: worm_tail != worm_head
+    cmpl    %edx, worm_head
+    je      3f
+    # Move iterator (%edx) forward and compare pointed worm part with worm_head_pos
+    call    move_worm_index
+    movw    (%eax, %edx, 2), %cx        # %cx = worm[%edx]
     cmpw    %cx, worm_head_pos           # if (worm_head_x - %ecx
     jne     2f                          #       != 0) goto 2f
     # End the game on collision.
     jmp     game_over
 2:  # End of the loop body, beginning of loop condition.
-    cmpl    %edx, worm_head             # if (worm_head - %ebx
-    je      3f                          #       == 0) goto 3f
-    call    move_worm_index
-    jmp     1b  
+    jmp     loop_self_collision  
 3:  #End of the loop
-
     ## Grow the worm
     movw    worm_head_pos, %bx
     call    add_worm_part
@@ -213,21 +213,27 @@ add_worm_part:
 # Params:   %edx    index in the worm array
 move_worm_index:
     incl    %edx                        # %edx++
-    cmpl    $FIELD_SIZE, %edx           # if (%edx - $FIELD_SIZE
-    jl      1f                          #       < 0) skip instruction
+    cmpl    $BUFFER_SIZE / 2, %edx           # if (%edx - $FIELD_SIZE
+    jl      1f                             #       < 0) skip instruction
     xorl    %edx, %edx                  # %edx = 0
 1:
     ret
 
 debug_sleep:
+    pushl   %eax
+    pushl   %ecx
+    pushl   %edx    
     pushl   $2000000
     call    usleep
     addl    $4, %esp
+    popl    %edx
+    popl    %ecx
+    popl    %eax
     ret
 
 # Draws...
 # Params:   %bl/%bh Coordinates
-#           Stack    Character
+#           %eax    Character
 draw:
     pushl   %eax
     xorl    %eax, %eax
