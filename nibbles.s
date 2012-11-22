@@ -7,7 +7,7 @@
 .set    WORM_TILE,      'O'
 .set    APPLE_TILE,     '@'
 .set    FLOOR_TILE,     ' '
-.set    SLEEP_TIME,     100000
+.set    SLEEP_TIME,     50000
 .set    DOWN_KEY,       258   
 .set    UP_KEY,         259
 .set    LEFT_KEY,       260
@@ -16,17 +16,17 @@
 
 .section .data
 d_values:
-    .byte   0x00
-    .byte   0x01
-    .byte   0x00
-    .byte   0xFF
-    .byte   0xFF
-    .byte   0x00
-    .byte   0x01
-    .byte   0x00
+    .byte   0
+    .byte   1
+    .byte   0
+    .byte   FIELD_Y - 1
+    .byte   FIELD_X - 1
+    .byte   0
+    .byte   1
+    .byte   0
 worm_d:
-    .byte   0x00
-    .byte   0xFF
+    .byte   0
+    .byte   FIELD_Y - 1
 
 
 .section .bss
@@ -89,22 +89,19 @@ no_key:  # end of selection
 
     ## Calculate the new worm head
     # Calculate the x position: worm_head_x = worm[worm_head].x + worm_dx
-    movl    worm_head, %ecx
-    movl    $worm, %edx
-    movw    (%edx, %ecx, 2), %ax
-    movw    worm_d, %bx
-    addb    %bl, %al
-    addb    %bh, %ah
-    movw    %ax, worm_head_pos
-    # Probe for wall colision
-    cmpb    $0, %al
-    jb      game_over
-    cmpb    $FIELD_X, %al
-    jae     game_over
-    cmpb    $0, %ah
-    jb      game_over
-    cmpb    $FIELD_Y, %ah
-    jae     game_over
+    movl    worm_head, %esi
+    movl    $worm, %edi
+    movw    (%edi, %esi, 2), %ax
+    addw    worm_d, %ax
+    # if (%al - $FIELD_X >= 0) %al -= $FIELD_X
+    subb    $FIELD_X, %al
+    jns     1f
+    addb    $FIELD_X, %al
+1:  subb    $FIELD_Y, %ah
+    jns     2f
+    addb    $FIELD_Y, %ah
+2:  movw    %ax, worm_head_pos
+    
 
 
     ## Probe for collision with apples.
