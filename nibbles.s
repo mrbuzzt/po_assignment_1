@@ -66,6 +66,9 @@ start_game:
     # At first, we need to set up the initial game state.
     # Call nib_init().
     call    nib_init
+    
+    # Misuse the %ebp register to store the worm array start.
+    movl    $worm, %ebp
 
     # Add len initial worm parts so that the head is in the middle of the field.
     movb    $FIELD_X / 2, %bl
@@ -107,8 +110,7 @@ no_key:  # end of selection
     # Calculate the new position:
     # worm_head_pos = worm[worm_head] + worm_d
     movl    worm_head, %esi
-    movl    $worm, %edi
-    movw    (%edi, %esi, 2), %ax
+    movw    (%ebp, %esi, 2), %ax
     addw    worm_d, %ax
     # worm_head_pos.x %= FIELD_X
     subb    $FIELD_X, %al
@@ -147,14 +149,12 @@ loop_apple_collision:  # Iterate over all apples.
     call    move_worm_index
     movl    %edx, worm_tail
     # Draw floor where the tail points now (worm_tail is exclusive)
-    movl    $worm, %ecx
-    movw    (%ecx, %edx, 2), %bx
+    movw    (%ebp, %edx, 2), %bx
     movl    $FLOOR_TILE, %eax
     call    draw
 after_grow:
 
     # Probe for collision with the worm itself
-    movl    $worm, %eax
     movl    worm_tail, %edx
 loop_self_collision:  # Loop over all worm tiles.
     # Check loop condition: worm_tail != worm_head
@@ -162,7 +162,7 @@ loop_self_collision:  # Loop over all worm tiles.
     je      3f
     # Move iterator (%edx) forward and compare pointed worm part with worm_head_pos
     call    move_worm_index
-    movw    (%eax, %edx, 2), %cx        # %cx = worm[%edx]
+    movw    (%ebp, %edx, 2), %cx        # %cx = worm[%edx]
     cmpw    %cx, worm_head_pos
     jne     2f
     # End the game on collision.
@@ -214,12 +214,11 @@ create_apple:
 # Params:   %bl    x coordinate
 #           %bh    y coordinate
 add_worm_part:
-    movl    $worm, %eax
     movl    worm_head, %edx
     # Move the worm_head forward before saving the new component.
     call    move_worm_index
     movl    %edx, worm_head
-    movw    %bx, (%eax, %edx, 2)
+    movw    %bx, (%ebp, %edx, 2)
     movl    $WORM_TILE, %eax
     call    draw
     ret
