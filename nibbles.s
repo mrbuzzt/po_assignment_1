@@ -1,6 +1,7 @@
-# Globals
+### Globals ###
 .globl start_game
 
+### Constants ###
 .set    FIELD_X,        80
 .set    FIELD_Y,        50
 .set    BUFFER_SIZE,    2 * FIELD_X * FIELD_Y 
@@ -14,8 +15,11 @@
 .set    RIGHT_KEY,      261
 .set    NO_KEY,         -1
 
+### Initialized data ###
 .section .data
-d_values:
+
+# Array with key-direction mapping
+key_to_direction:
     .byte   0
     .byte   1
     .byte   0
@@ -24,121 +28,134 @@ d_values:
     .byte   0
     .byte   1
     .byte   0
+
+# Worm direction (initially going up)
 worm_d:
     .byte   0
     .byte   FIELD_Y - 1
 
-
+### Zero-initialized data ###
 .section .bss
+
+# End and start index in the worm buffer
 worm_head:
     .long   0
 worm_tail:
     .long   0
+
+# Stores the future worm's position
 worm_head_pos:
-worm_head_x:
     .byte   0
-worm_head_y:
     .byte   0
+
+# Stores whether the worm ate an apple each round
 grow_worm:
     .byte   0
+
+# Buffer for apple positions
     .lcomm  apples, BUFFER_SIZE
+
+# Buffer for worm part positions
     .lcomm  worm, BUFFER_SIZE
 
-
+### Code ###
 .section .text
 
 # Implementation of start_game(int len, int num_apples)
 start_game:
-    pushl   %ebp        # save the base pointer in order to be able to return
-    movl    %esp, %ebp  # capture the new base pointer
-    call    nib_init    # nib_init()
+    # At first, we need to set up the initial game state.
+    # Call nib_init().
+    call    nib_init
 
-    # Add len initial worm parts.
-    movb    $FIELD_X / 2, %bl      # %esi = $FIELD_X / 2
-    movb    8(%ebp), %bh           # %ecx = len
-    addb    $FIELD_Y / 2, %bh      # %eax = %eax + FIELD_Y / 2
-loop_init_worm:       # Iterate to add all parts
+    # Add len initial worm parts so that the head is in the middle of the field.
+    movb    $FIELD_X / 2, %bl
+    movb    4(%esp), %bh        # %bh = len (Argument)
+    addb    $FIELD_Y / 2, %bh
+loop_init_worm:       # Add one worm part in each iteration
     call    add_worm_part
     decb    %bh
     cmpb    $FIELD_Y / 2, %bh
     jg      loop_init_worm
 
     # Initialize the apples.
-    movl    12(%ebp), %ecx  # %ecx = num_apples
-loop_init_apples:   # Set up the initial apples.
+    movl    8(%esp), %ecx  # %ecx = num_apples
+loop_init_apples:
     call    create_apple
     loop    loop_init_apples        # if (--%ecx == 0) jump to loop_init_apples
     
+# Now the game is set up and the recurring game logic comes.
+# Each iteration of the game loop moves the worm by one field.
 game_loop:
-    ## The game loop
-    # sleep at first
+    # Sleep at first to get a reasonable game speed.
     pushl   $SLEEP_TIME
     call    usleep
     addl    $4, %esp
 
-    ## Read the keyboard and evaluate the key.
-    call    nib_poll_kbd            # %eax = nib_poll_keyboard()
-    cmpl    $RIGHT_KEY, %eax        # if (%eax - $RIGHT_KEY
-    jg      no_key                  #       > 0) goto no_key
-    subl    $DOWN_KEY, %eax         # %eax -= $DOWN_KEY
-    js      no_key                  # if (%eax < 0) goto no_key
-    movl    $d_values, %ecx         #
-    movw    (%ecx, %eax, 2), %bx    #
-    movw    %bx, worm_d             #
+    # Read the keyboard and evaluate the key.
+    call    nib_poll_kbd            # %eax = nib_poll_kbd()
+    # If key code corresponds to an arrow key then calculate an index into
+    # key_to_direction to it.
+    cmpl    $RIGHT_KEY, %eax  
+    jg      no_key 
+    subl    $DOWN_KEY, %eax
+    js      no_key
+    movl    $key_to_direction, %ecx # At this point, the keycode is converted into
+    movw    (%ecx, %eax, 2), %bx    # an index into the key_to_direction array. Store the 
+    movw    %bx, worm_d             # d_value in worm_d.
 no_key:  # end of selection
 
-    ## Calculate the new worm head
-    # Calculate the x position: worm_head_x = worm[worm_head].x + worm_dx
+    # Calculate the new position:
+    # worm_head_pos = worm[worm_head] + worm_d
     movl    worm_head, %esi
     movl    $worm, %edi
     movw    (%edi, %esi, 2), %ax
     addw    worm_d, %ax
-    # if (%al - $FIELD_X >= 0) %al -= $FIELD_X
+    # worm_head_pos.x %= FIELD_X
     subb    $FIELD_X, %al
     jns     1f
     addb    $FIELD_X, %al
+    # worm_head_pos.y %= FIELD_Y
 1:  subb    $FIELD_Y, %ah
     jns     2f
     addb    $FIELD_Y, %ah
+    # Store the new position
 2:  movw    %ax, worm_head_pos
     
 
 
-    ## Probe for collision with apples.
+    # Probe for collision with apples.
     movb    $0, grow_worm
-    # Initialize the loop counter.
-    movl    12(%ebp), %ecx              # %ecx = num_apples
-1:  # begin of loop: Iterate over all apples.
-    # Check whether the worm head is at a position of the current apple
-    movl    $apples, %ebx               # %eax = apples[%ecx - 1].x
-    movw    -2(%ebx, %ecx, 2), %dx     
-    cmp     %dx, worm_head_pos           # if (worm_head_x - %eax
-    jne     2f                          #       != 0) goto 2f
+    movl    8(%esp), %ecx               # %ecx = num_apples
+loop_apple_collision:  # Iterate over all apples.
+    # Check whether worm_head is at the position of the current apple.
+    movl    $apples, %ebx
+    movw    -2(%ebx, %ecx, 2), %dx      # %dx = apples[%ecx - 1]
+    cmp     %dx, worm_head_pos
+    jne     1f
     call    create_apple
     # Remember to let the worm grow.
     incb    grow_worm
-2:    
-    loop    1b
+1:
+    loop    loop_apple_collision        # while (--%ecx > 0)
 
    
-    ## Pull the tail of the worm
-    # Check if we want to grow the worm.
-    cmpb    $0, grow_worm               # if (grow_worm
-    jg      after_grow                          #       > 0) goto 2f
+    # Pull the tail of the worm if grow_worm == 0.
+    cmpb    $0, grow_worm
+    jg      after_grow
     # Calculate the new worm_tail: worm_tail = (worm_tail + 1) % FIELD_SIZE
-    movl    worm_tail, %edx             # %eax = worm_tail
+    movl    worm_tail, %edx
     call    move_worm_index
-    movl    %edx, worm_tail             # worm_tail = %edx
-    # Draw floor where the tail points now (tail is exclusive)
+    movl    %edx, worm_tail
+    # Draw floor where the tail points now (worm_tail is exclusive)
     movl    $worm, %ecx
     movw    (%ecx, %edx, 2), %bx
     movl    $FLOOR_TILE, %eax
     call    draw
 after_grow:
 
-    ## Probe for collision with the worm itself
-    movl    $worm, %eax                 # %eax = &worm
-    movl    worm_tail, %edx             # %ebx = worm_tail
+    # Probe for collision with the worm itself
+    movl    $worm, %eax
+    movl    worm_tail, %edx
 loop_self_collision:  # Loop over all worm tiles.
     # Check loop condition: worm_tail != worm_head
     cmpl    %edx, worm_head
@@ -146,14 +163,15 @@ loop_self_collision:  # Loop over all worm tiles.
     # Move iterator (%edx) forward and compare pointed worm part with worm_head_pos
     call    move_worm_index
     movw    (%eax, %edx, 2), %cx        # %cx = worm[%edx]
-    cmpw    %cx, worm_head_pos           # if (worm_head_x - %ecx
-    jne     2f                          #       != 0) goto 2f
+    cmpw    %cx, worm_head_pos
+    jne     2f
     # End the game on collision.
     jmp     game_over
-2:  # End of the loop body, beginning of loop condition.
+2: 
     jmp     loop_self_collision  
 3:  #End of the loop
-    ## Grow the worm
+    
+    # Draw and save the new worm head.
     movw    worm_head_pos, %bx
     call    add_worm_part
  
@@ -168,26 +186,27 @@ game_over:
 # Params:   %ecx    Index+1 in the apples array
 # Uses:     %eax, %edx, %edi, %esi
 create_apple:
+    # This function shall not modify %ecx.
     pushl   %ecx
-    # Generate the y coordinate and store it into %esi.
+    # Generate the y coordinate and store it into %bh.
     call    rand                        # %eax = rand()
     xorb    %ah, %ah
-    movb    $FIELD_Y, %cl              # %edi = $FIELD_Y
-    divb    %cl                        # %edx = %edx:%eax & %edi
-    movb    %ah, %bh                  # %esi = %edx
-    # Generate the x coordinate and store it into %edi.
-    call    rand                        # %eax = rand(), use as x coordinate
+    movb    $FIELD_Y, %cl
+    divb    %cl                         # %ah = %ax % %cl
+    movb    %ah, %bh
+    # Generate the x coordinate and store it into %bl.
+    call    rand                        # %eax = rand()
     xorb    %ah, %ah
-    movb    $FIELD_X, %cl              # %edi = $FIELD_Y
-    divb    %cl                        # %edx = %edx:%eax & %edi
-    movb    %ah, %bl                  # %esi = %edx
+    movb    $FIELD_X, %cl
+    divb    %cl                         # %ah = %ax % %cl
+    movb    %ah, %bl
     # Draw the new apple.
     movl    $APPLE_TILE, %eax
     call    draw
     popl    %ecx                        # Restore %ecx.
     # Store the new coordinates.
     movl    $apples, %eax
-    movw    %bx, -2(%eax, %ecx, 2)     # apples[%ecx - 1].x = %edi
+    movw    %bx, -2(%eax, %ecx, 2)      # apples[%ecx - 1] = %bx
     ret
 
 # Stores the given worm part in the worm array, moving worm_head forward.
@@ -195,12 +214,11 @@ create_apple:
 # Params:   %bl    x coordinate
 #           %bh    y coordinate
 add_worm_part:
-    movl    $worm, %eax             # %edi = $worm
-    # Compute and add the y component.
-    movl    worm_head, %edx         # %edx = worm_head
+    movl    $worm, %eax
+    movl    worm_head, %edx
     # Move the worm_head forward before saving the new component.
-    call    move_worm_index         # move_worm_index()
-    movl    %edx, worm_head         # worm_head = %edx
+    call    move_worm_index
+    movl    %edx, worm_head
     movw    %bx, (%eax, %edx, 2)
     movl    $WORM_TILE, %eax
     call    draw
@@ -209,26 +227,15 @@ add_worm_part:
 # Moves an index pointer to the worm array one position forward.
 # Params:   %edx    index in the worm array
 move_worm_index:
-    incl    %edx                        # %edx++
-    cmpl    $BUFFER_SIZE / 2, %edx           # if (%edx - $FIELD_SIZE
-    jl      1f                             #       < 0) skip instruction
+    # %edx = (%edx + 1) % (BUFFER_SIZE / 2)
+    incl    %edx
+    cmpl    $BUFFER_SIZE / 2, %edx
+    jl      1f
     xorl    %edx, %edx                  # %edx = 0
 1:
     ret
 
-debug_sleep:
-    pushl   %eax
-    pushl   %ecx
-    pushl   %edx    
-    pushl   $2000000
-    call    usleep
-    addl    $4, %esp
-    popl    %edx
-    popl    %ecx
-    popl    %eax
-    ret
-
-# Draws...
+# Draws a character at the specified position.
 # Params:   %bl/%bh Coordinates
 #           %eax    Character
 draw:
@@ -238,8 +245,7 @@ draw:
     pushl   %eax
     movb    %bl, %al
     pushl   %eax
-    # Call nib_put_scr(x, y, WORM_TILE)    
-    call    nib_put_scr
-    addl    $12, %esp               # Restore the stack
+    call    nib_put_scr                 # nib_put_scr(%bl, %bh, %eax)
+    addl    $12, %esp
     ret
 
