@@ -70,7 +70,8 @@ start_game:
     # Misuse the %ebp register to store the worm array start.
     movl    $worm, %ebp
 
-    # Add len initial worm parts so that the head is in the middle of the field.
+    # Add len initial worm parts so that the head is in the 
+    # middle of the field.
     movb    $FIELD_X / 2, %bl
     movb    4(%esp), %bh        # %bh = len (Argument)
     addb    $FIELD_Y / 2, %bh
@@ -84,7 +85,8 @@ loop_init_worm:       # Add one worm part in each iteration
     movl    8(%esp), %ecx  # %ecx = num_apples
 loop_init_apples:
     call    create_apple
-    loop    loop_init_apples        # if (--%ecx == 0) jump to loop_init_apples
+    loop    loop_init_apples        # if (--%ecx == 0) 
+                                    # jump to loop_init_apples
     
 # Now the game is set up and the recurring game logic comes.
 # Each iteration of the game loop moves the worm by one field.
@@ -96,15 +98,17 @@ game_loop:
 
     # Read the keyboard and evaluate the key.
     call    nib_poll_kbd            # %eax = nib_poll_kbd()
-    # If key code corresponds to an arrow key then calculate an index into
-    # key_to_direction to it.
+    # If key code corresponds to an arrow key then calculate an
+    # index into key_to_direction to it.
     cmpl    $RIGHT_KEY, %eax  
     jg      no_key 
     subl    $DOWN_KEY, %eax
     js      no_key
-    movl    $key_to_direction, %ecx # At this point, the keycode is converted into
-    movw    (%ecx, %eax, 2), %bx    # an index into the key_to_direction array. Store the 
-    movw    %bx, worm_d             # d_value in worm_d.
+    # At this point, the keycode is converted into an index into 
+    # the key_to_direction array in %eax.
+    movl    $key_to_direction, %ecx 
+    movw    (%ecx, %eax, 2), %bx    # %bx = key_to_direction[%eax]
+    movw    %bx, worm_d             # Store the d_value in worm_d.
 no_key:  # end of selection
 
     # Calculate the new position:
@@ -129,7 +133,8 @@ no_key:  # end of selection
     movb    $0, grow_worm
     movl    8(%esp), %ecx               # %ecx = num_apples
 loop_apple_collision:  # Iterate over all apples.
-    # Check whether worm_head is at the position of the current apple.
+    # Check whether worm_head is at the position of the current
+    # apple.
     movl    $apples, %ebx
     movw    -2(%ebx, %ecx, 2), %dx      # %dx = apples[%ecx - 1]
     cmp     %dx, worm_head_pos
@@ -144,7 +149,8 @@ loop_apple_collision:  # Iterate over all apples.
     # Pull the tail of the worm if grow_worm == 0.
     cmpb    $0, grow_worm
     jg      after_grow
-    # Calculate the new worm_tail: worm_tail = (worm_tail + 1) % FIELD_SIZE
+    # Calculate the new worm_tail:
+    # worm_tail = (worm_tail + 1) % FIELD_SIZE
     movl    worm_tail, %edx
     call    move_worm_index
     movl    %edx, worm_tail
@@ -160,7 +166,8 @@ loop_self_collision:  # Loop over all worm tiles.
     # Check loop condition: worm_tail != worm_head
     cmpl    %edx, worm_head
     je      3f
-    # Move iterator (%edx) forward and compare pointed worm part with worm_head_pos
+    # Move iterator (%edx) forward and compare pointed worm part 
+    # with worm_head_pos.
     call    move_worm_index
     movw    (%ebp, %edx, 2), %cx        # %cx = worm[%edx]
     cmpw    %cx, worm_head_pos
@@ -209,8 +216,8 @@ create_apple:
     movw    %bx, -2(%eax, %ecx, 2)      # apples[%ecx - 1] = %bx
     ret
 
-# Stores the given worm part in the worm array, moving worm_head forward.
-# Additionally it draws the worm part.
+# Stores the given worm part in the worm array, moving worm_head 
+# forward. Additionally it draws the worm part.
 # Params:   %bl    x coordinate
 #           %bh    y coordinate
 add_worm_part:
@@ -238,13 +245,14 @@ move_worm_index:
 # Params:   %bl/%bh Coordinates
 #           %eax    Character
 draw:
+    # Call nib_put_scr(%bl, %bh, %eax).
     pushl   %eax
     xorl    %eax, %eax
     movb    %bh, %al
     pushl   %eax
     movb    %bl, %al
     pushl   %eax
-    call    nib_put_scr                 # nib_put_scr(%bl, %bh, %eax)
+    call    nib_put_scr                 
     addl    $12, %esp
     ret
 
