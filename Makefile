@@ -5,7 +5,7 @@ all: nibbles_asm nibbles_asm_start
 
 # Rule for compiling C source
 .c.o:
-	gcc -Os  -Wall -g -c $<
+	gcc -Os -march=i686 -Wall -g -c $<
 
 # Rule for compiling assembly source
 .S.o:
